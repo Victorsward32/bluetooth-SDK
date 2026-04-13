@@ -1,2 +1,43 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+<!--  Bluetooth : Basic BLE Operations (Scanning and connecting )
+ Required for API level < 31
+
+ -->
+  <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+<!--  Bluetooth admin :  Required to start device discovery (scanning )
+  and to change Bluetooth settings
+  Required for api level < 31
+  -->
+  <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+<!--  ===================================================================================
+ Category 2: mordern permissionns (android 12 /API 31 and above ) google split the
+  permission into old bluetooth permissions int o 3 specific ones
+  ===================================================================================
+ -->
+  <uses-permission android:name="android.permission.BLUETOOTH_SCAN"  tools:targetApi="s"/>
+<!--
+ Bluetooth connect: required to pair with and connect to a device. used to classicsocketMananger.connect(), BleConnectionManager.connect()
+ Also required to read devices name (Yes, even just reading a name )
+ -->
+  <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" tools:targetApi="s"/>
+<!--  Bluetooth advertises = required to make this device broadcast ad ble periphales (server) used in BleAdverstiser.startAdvertising-->
+  <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" tools:targetApi="s"/>
+<!---  ===================================================================================
+       Location Permissions
+       ===================================================================================
+
+ -->
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+
+<!--  =====================================================================================
+       Hardware Feature Declarations
+      =====================================================================================
+-->
+<!--  bluetooth classic-->
+  <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+<!--  BLE -->
+  <uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>
+
+
 </manifest>
