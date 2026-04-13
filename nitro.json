@@ -1,0 +1,23 @@
+{
+  "cxxNamespace": ["blesdk"],
+  "ios": {
+    "iosModuleName": "BleSdk"
+  },
+  "android": {
+    "androidNamespace": ["blesdk"],
+    "androidCxxLibName": "blesdk"
+  },
+  "autolinking": {
+    "BleSdk": {
+      "ios": {
+        "language": "swift",
+        "implementationClassName": "BleSdk"
+      },
+      "android": {
+        "language": "kotlin",
+        "implementationClassName": "BleSdk"
+      }
+    }
+  },
+  "ignorePaths": ["node_modules"]
+}
