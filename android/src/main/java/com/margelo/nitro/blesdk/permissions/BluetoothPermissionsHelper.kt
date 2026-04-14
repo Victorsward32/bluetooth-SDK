@@ -29,14 +29,10 @@ fun getRequiredPermissions() : Array<String> {
     arrayOf(
       Manifest.permission.BLUETOOTH_SCAN,  // To search for devices
       Manifest.permission.BLUETOOTH_CONNECT, // TO connect./Pair to devices
-      Manifest.permission.BLUETOOTH_ADVERTISE, // Top advertise the peripherals
-      Manifest.permission.ACCESS_FINE_LOCATION // To get location
     )
   }
   else{
     arrayOf(
-      Manifest.permission.BLUETOOTH,  // Basic Bluetooth operations
-      Manifest.permission.BLUETOOTH_ADMIN, // Discovery and setting
       Manifest.permission.ACCESS_FINE_LOCATION, // To get location required for scanning
       Manifest.permission.ACCESS_COARSE_LOCATION // To get fallback location
     )
@@ -93,7 +89,7 @@ fun getRequiredPermissions() : Array<String> {
   fun handlePermissionResult(requestCode: Int,grantResults: IntArray): Boolean{
     if(requestCode != REQUEST_CODE_BLUETOOTH) return  false
 
-    // check if every permissions in the result was granted
+    // check if every (permissions) in the result was granted
     val allGranted = grantResults.isNotEmpty() && grantResults.all{ it == PackageManager.PERMISSION_GRANTED }
 
     if(allGranted){
@@ -116,5 +112,4 @@ fun getRequiredPermissions() : Array<String> {
 
 
   }
-
 

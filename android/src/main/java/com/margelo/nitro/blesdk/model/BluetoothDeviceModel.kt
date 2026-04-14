@@ -1,34 +1,118 @@
 package com.margelo.nitro.blesdk.model
 
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothProfile
+import com.margelo.nitro.blesdk.BleDevice
+
 data class BluetoothDeviceModel(
   val name: String?,
   val address: String,
   val type: Int,
   val bondState: Int,
+  val connectionState: Int = BluetoothProfile.STATE_DISCONNECTED,
   val rssi: Int = -1,
-  val isBle: Boolean = (type == 2 || type == 3)
+  val isBle: Boolean = (
+    type == BluetoothDevice.DEVICE_TYPE_LE ||
+      type == BluetoothDevice.DEVICE_TYPE_DUAL
+  ),
+  val serviceUuids: List<String> = emptyList(),
 ) {
-  //---------- Display name with fallback ------------------//
+  companion object {
+    fun isBleType(type: Int): Boolean {
+      return type == BluetoothDevice.DEVICE_TYPE_LE ||
+        type == BluetoothDevice.DEVICE_TYPE_DUAL
+    }
+
+    fun fromBluetoothDevice(
+      device: BluetoothDevice,
+      rssi: Int = -1,
+      serviceUuids: List<String> = device.uuids?.map { uuid -> uuid.uuid.toString() } ?: emptyList(),
+      bondState: Int = device.bondState,
+      connectionState: Int = BluetoothProfile.STATE_DISCONNECTED,
+    ): BluetoothDeviceModel {
+      return BluetoothDeviceModel(
+        name = device.name,
+        address = device.address,
+        type = device.type,
+        bondState = bondState,
+        connectionState = connectionState,
+        rssi = rssi,
+        isBle = isBleType(device.type),
+        serviceUuids = serviceUuids,
+      )
+    }
+  }
+
   fun displayName(): String {
     return name ?: "unknown ($address)"
   }
-  //------- Human readable band state string  for ui display --------------------//
-  fun bandStateString(): String {
+
+  fun bondStateString(): String {
     return when (bondState) {
-      1 -> "Not Paired"
-      2 -> "Pairing..."
-      3 -> "Paired"
+      BluetoothDevice.BOND_NONE -> "Not Paired"
+      BluetoothDevice.BOND_BONDING -> "Pairing..."
+      BluetoothDevice.BOND_BONDED -> "Paired"
       else -> "UNKNOWN"
     }
   }
 
-  //-------- Human redable device type string ---------------------------//
-  fun typeString(): String{
-    return when(type){
-      1 -> "Classic"
-      2 -> "BLE"
-      3 -> "Dual(classic + BLE)"
+  fun typeString(): String {
+    return when (type) {
+      BluetoothDevice.DEVICE_TYPE_CLASSIC -> "Classic"
+      BluetoothDevice.DEVICE_TYPE_LE -> "BLE"
+      BluetoothDevice.DEVICE_TYPE_DUAL -> "Dual(classic + BLE)"
       else -> "UNKNOWN"
     }
+  }
+
+  fun connectionStateString(): String {
+    return when (connectionState) {
+      BluetoothProfile.STATE_DISCONNECTED -> "Disconnected"
+      BluetoothProfile.STATE_CONNECTING -> "Connecting..."
+      BluetoothProfile.STATE_CONNECTED -> "Connected"
+      BluetoothProfile.STATE_DISCONNECTING -> "Disconnecting..."
+      else -> "UNKNOWN"
+    }
+  }
+
+  fun toBleDevice(): BleDevice {
+    return BleDevice(
+      name = name,
+      address = address,
+      type = type.toDouble(),
+      typeLabel = typeString(),
+      bondState = bondState.toDouble(),
+      bondStateLabel = bondStateString(),
+      connectionState = connectionState.toDouble(),
+      connectionStateLabel = connectionStateString(),
+      rssi = rssi.toDouble(),
+      isBle = isBle,
+      serviceUuids = serviceUuids.toTypedArray(),
+    )
+  }
+
+  fun mergeWith(next: BluetoothDeviceModel): BluetoothDeviceModel {
+    val mergedType =
+      if (next.type != BluetoothDevice.DEVICE_TYPE_UNKNOWN) next.type else type
+    val mergedName = next.name ?: name
+    val mergedRssi = when {
+      rssi == -1 -> next.rssi
+      next.rssi == -1 -> rssi
+      else -> ((rssi * 3) + next.rssi) / 4
+    }
+    val mergedServiceUuids = linkedSetOf<String>().apply {
+      addAll(serviceUuids)
+      addAll(next.serviceUuids)
+    }.toList()
+
+    return copy(
+      name = mergedName,
+      type = mergedType,
+      bondState = next.bondState,
+      connectionState = next.connectionState,
+      rssi = mergedRssi,
+      isBle = isBleType(mergedType),
+      serviceUuids = mergedServiceUuids,
+    )
   }
 }

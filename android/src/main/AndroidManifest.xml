@@ -14,21 +14,22 @@
   permission into old bluetooth permissions int o 3 specific ones
   ===================================================================================
  -->
-  <uses-permission android:name="android.permission.BLUETOOTH_SCAN"  tools:targetApi="s"/>
+  <uses-permission
+    android:name="android.permission.BLUETOOTH_SCAN"
+    android:usesPermissionFlags="neverForLocation"
+    tools:targetApi="s"/>
 <!--
  Bluetooth connect: required to pair with and connect to a device. used to classicsocketMananger.connect(), BleConnectionManager.connect()
  Also required to read devices name (Yes, even just reading a name )
  -->
   <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" tools:targetApi="s"/>
-<!--  Bluetooth advertises = required to make this device broadcast ad ble periphales (server) used in BleAdverstiser.startAdvertising-->
-  <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" tools:targetApi="s"/>
 <!---  ===================================================================================
        Location Permissions
        ===================================================================================
 
  -->
-  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30"/>
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="30"/>
 
 <!--  =====================================================================================
        Hardware Feature Declarations
