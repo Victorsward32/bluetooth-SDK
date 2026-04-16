@@ -340,6 +340,7 @@ export default function App() {
     }
   }
 
+  console.log('Devices:---->', devices);
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>

@@ -1,5 +1,6 @@
 package com.margelo.nitro.blesdk.bluetooth.facade
 
+import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
@@ -12,6 +13,7 @@ import android.content.IntentFilter
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
+import androidx.annotation.RequiresPermission
 import com.margelo.nitro.blesdk.bluetooth.manager.BleConnectionManager
 import com.margelo.nitro.blesdk.bluetooth.scanner.BleScanner
 import com.margelo.nitro.blesdk.model.BluetoothDeviceModel
@@ -33,25 +35,36 @@ class BleFacade(private val context: Context) {
   private var isInitialized = false
   private var isBondStateReceiverRegistered = false
   private val bondStateReceiver = object : BroadcastReceiver() {
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     override fun onReceive(receiverContext: Context?, intent: Intent?) {
       if (intent?.action != BluetoothDevice.ACTION_BOND_STATE_CHANGED) {
         return
       }
 
-      val device = intent.getBluetoothDeviceExtra() ?: return
-      val bondState = intent.getIntExtra(
-        BluetoothDevice.EXTRA_BOND_STATE,
-        device.bondState,
-      )
+      if (!BluetoothPermissionsHelper.hasConnectPermission(context)) {
+        Log.w(TAG, "Skipping bond-state update because BLUETOOTH_CONNECT is not granted")
+        return
+      }
 
-      Log.d(TAG, "Bond state changed for ${device.address}: $bondState")
-      upsertDevice(
-        device = device,
-        rssi = discoveredDevices[device.address]?.rssi ?: -1,
-        serviceUuids = discoveredDevices[device.address]?.serviceUuids ?: emptyList(),
-        bondState = bondState,
-        connectionState = connectionManager.getConnectionState(device.address),
-      )
+      try {
+        val device = intent.getBluetoothDeviceExtra() ?: return
+        val bondState = intent.getIntExtra(
+          BluetoothDevice.EXTRA_BOND_STATE,
+          device.bondState,
+        )
+
+        Log.d(TAG, "Bond state changed for ${device.address}: $bondState")
+        upsertDevice(
+          device = device,
+          rssi = discoveredDevices[device.address]?.rssi ?: -1,
+          serviceUuids = discoveredDevices[device.address]?.serviceUuids ?: emptyList(),
+          characterSticksUuid= discoveredDevices[device.address]?.characterSticsUuid ?: emptyList(),
+          bondState = bondState,
+          connectionState = connectionManager.getConnectionState(device.address),
+        )
+      } catch (error: SecurityException) {
+        Log.w(TAG, "Failed to process bond-state update because BLUETOOTH_CONNECT was revoked", error)
+      }
     }
   }
 
@@ -67,18 +80,28 @@ class BleFacade(private val context: Context) {
     Log.d(TAG, "Initializing BLE facade")
     registerBondStateReceiver()
 
-    connectionManager.onConnectionStateChanged = { device, connectionState, status ->
-      Log.d(
-        TAG,
-        "Connection state changed for ${device.address}: state=$connectionState status=$status",
-      )
-      upsertDevice(
-        device = device,
-        rssi = discoveredDevices[device.address]?.rssi ?: -1,
-        serviceUuids = discoveredDevices[device.address]?.serviceUuids ?: emptyList(),
-        bondState = discoveredDevices[device.address]?.bondState ?: device.bondState,
-        connectionState = connectionState,
-      )
+    connectionManager.onConnectionStateChanged = connectionStateChanged@ { device, connectionState, status ->
+      if (!BluetoothPermissionsHelper.hasConnectPermission(context)) {
+        Log.w(TAG, "Skipping connection-state update because BLUETOOTH_CONNECT is not granted")
+        return@connectionStateChanged
+      }
+
+      try {
+        Log.d(
+          TAG,
+          "Connection state changed for ${device.address}: state=$connectionState status=$status",
+        )
+        upsertDevice(
+          device = device,
+          rssi = discoveredDevices[device.address]?.rssi ?: -1,
+          serviceUuids = discoveredDevices[device.address]?.serviceUuids ?: emptyList(),
+          characterSticksUuid= discoveredDevices[device.address]?.characterSticsUuid ?: emptyList(),
+          bondState = discoveredDevices[device.address]?.bondState ?: device.bondState,
+          connectionState = connectionState,
+        )
+      } catch (error: SecurityException) {
+        Log.w(TAG, "Failed to process connection-state update because BLUETOOTH_CONNECT was revoked", error)
+      }
     }
 
     scanner.onDeviceFound = { model, _ ->
@@ -106,7 +129,18 @@ class BleFacade(private val context: Context) {
   }
 
   fun isBluetoothEnabled(): Boolean {
-    return bluetoothAdapter?.isEnabled == true
+    val adapter = bluetoothAdapter ?: return false
+    if (!BluetoothPermissionsHelper.hasConnectPermission(context)) {
+      Log.d(TAG, "BLUETOOTH_CONNECT is not granted; reporting Bluetooth as unavailable")
+      return false
+    }
+
+    return try {
+      adapter.isEnabled
+    } catch (error: SecurityException) {
+      Log.w(TAG, "Failed to read Bluetooth adapter state because BLUETOOTH_CONNECT was revoked", error)
+      false
+    }
   }
 
   fun isScanning(): Boolean {
@@ -127,8 +161,8 @@ class BleFacade(private val context: Context) {
     scanMode: Double? = null,
   ) {
     ensureBluetoothSupported()
-    ensureBluetoothEnabled()
     ensurePermissions()
+    ensureBluetoothEnabled()
 
     val normalizedServiceUuid = serviceUuid
       ?.trim()
@@ -158,10 +192,11 @@ class BleFacade(private val context: Context) {
     scanner.stopScan()
   }
 
+  @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
   fun pairDevice(address: String): Boolean {
     ensureBluetoothSupported()
-    ensureBluetoothEnabled()
     ensurePermissions()
+    ensureBluetoothEnabled()
 
     require(BluetoothAdapter.checkBluetoothAddress(address)) {
       "Invalid Bluetooth device address: $address"
@@ -178,6 +213,7 @@ class BleFacade(private val context: Context) {
         device = device,
         rssi = discoveredDevices[address]?.rssi ?: -1,
         serviceUuids = discoveredDevices[address]?.serviceUuids ?: emptyList(),
+        characterSticksUuid= discoveredDevices[device.address]?.characterSticsUuid ?: emptyList(),
         bondState = BluetoothDevice.BOND_BONDED,
         connectionState = currentConnectionState,
       )
@@ -190,6 +226,7 @@ class BleFacade(private val context: Context) {
         device = device,
         rssi = discoveredDevices[address]?.rssi ?: -1,
         serviceUuids = discoveredDevices[address]?.serviceUuids ?: emptyList(),
+        characterSticksUuid= discoveredDevices[device.address]?.characterSticsUuid ?: emptyList(),
         bondState = BluetoothDevice.BOND_BONDING,
         connectionState = currentConnectionState,
       )
@@ -198,10 +235,11 @@ class BleFacade(private val context: Context) {
     return pairingStarted
   }
 
+  @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
   fun unpairDevice(address: String): Boolean {
     ensureBluetoothSupported()
-    ensureBluetoothEnabled()
     ensurePermissions()
+    ensureBluetoothEnabled()
 
     require(BluetoothAdapter.checkBluetoothAddress(address)) {
       "Invalid Bluetooth device address: $address"
@@ -222,6 +260,7 @@ class BleFacade(private val context: Context) {
         device = device,
         rssi = discoveredDevices[address]?.rssi ?: -1,
         serviceUuids = discoveredDevices[address]?.serviceUuids ?: emptyList(),
+        characterSticksUuid= discoveredDevices[device.address]?.characterSticsUuid ?: emptyList(),
         bondState = BluetoothDevice.BOND_NONE,
         connectionState = BluetoothProfile.STATE_DISCONNECTED,
       )
@@ -239,6 +278,7 @@ class BleFacade(private val context: Context) {
         device = device,
         rssi = discoveredDevices[address]?.rssi ?: -1,
         serviceUuids = discoveredDevices[address]?.serviceUuids ?: emptyList(),
+        characterSticksUuid= discoveredDevices[device.address]?.characterSticsUuid ?: emptyList(),
         bondState = BluetoothDevice.BOND_NONE,
         connectionState = BluetoothProfile.STATE_DISCONNECTED,
       )
@@ -247,10 +287,11 @@ class BleFacade(private val context: Context) {
     return unpairStarted
   }
 
+  @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
   fun connectDevice(address: String): Boolean {
     ensureBluetoothSupported()
-    ensureBluetoothEnabled()
     ensurePermissions()
+    ensureBluetoothEnabled()
 
     require(BluetoothAdapter.checkBluetoothAddress(address)) {
       "Invalid Bluetooth device address: $address"
@@ -272,6 +313,7 @@ class BleFacade(private val context: Context) {
       upsertDevice(
         device = device,
         rssi = discoveredDevices[address]?.rssi ?: -1,
+        characterSticksUuid= discoveredDevices[device.address]?.characterSticsUuid ?: emptyList(),
         serviceUuids = discoveredDevices[address]?.serviceUuids ?: emptyList(),
         bondState = currentBondState,
         connectionState = BluetoothProfile.STATE_CONNECTED,
@@ -285,6 +327,7 @@ class BleFacade(private val context: Context) {
         device = device,
         rssi = discoveredDevices[address]?.rssi ?: -1,
         serviceUuids = discoveredDevices[address]?.serviceUuids ?: emptyList(),
+        characterSticksUuid= discoveredDevices[device.address]?.characterSticsUuid ?: emptyList(),
         bondState = currentBondState,
         connectionState = connectionManager.getConnectionState(address),
       )
@@ -293,10 +336,11 @@ class BleFacade(private val context: Context) {
     return connectStarted
   }
 
+  @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
   fun disconnectDevice(address: String): Boolean {
     ensureBluetoothSupported()
-    ensureBluetoothEnabled()
     ensurePermissions()
+    ensureBluetoothEnabled()
 
     require(BluetoothAdapter.checkBluetoothAddress(address)) {
       "Invalid Bluetooth device address: $address"
@@ -313,6 +357,8 @@ class BleFacade(private val context: Context) {
         device = device,
         rssi = discoveredDevices[address]?.rssi ?: -1,
         serviceUuids = discoveredDevices[address]?.serviceUuids ?: emptyList(),
+        characterSticksUuid= discoveredDevices[device.address]?.characterSticsUuid ?: emptyList(),
+
         bondState = currentBondState,
         connectionState = BluetoothProfile.STATE_DISCONNECTED,
       )
@@ -325,6 +371,7 @@ class BleFacade(private val context: Context) {
         device = device,
         rssi = discoveredDevices[address]?.rssi ?: -1,
         serviceUuids = discoveredDevices[address]?.serviceUuids ?: emptyList(),
+        characterSticksUuid= discoveredDevices[device.address]?.characterSticsUuid ?: emptyList(),
         bondState = currentBondState,
         connectionState = BluetoothProfile.STATE_DISCONNECTING,
       )
@@ -382,20 +429,24 @@ class BleFacade(private val context: Context) {
     discoveredDevices[model.address] = existing?.mergeWith(model) ?: model
   }
 
+  @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
   private fun upsertDevice(
     device: BluetoothDevice,
     rssi: Int = -1,
     serviceUuids: List<String> = emptyList(),
-    bondState: Int = device.bondState,
-    connectionState: Int = connectionManager.getConnectionState(device.address),
+    characterSticksUuid: List<String> = emptyList(),
+    bondState: Int? = null,
+    connectionState: Int? = null,
   ) {
+    val resolvedConnectionState = connectionState ?: connectionManager.getConnectionState(device.address)
     upsertDevice(
       BluetoothDeviceModel.fromBluetoothDevice(
         device = device,
         rssi = rssi,
         serviceUuids = serviceUuids,
+        characterSticksUuid= characterSticksUuid,
         bondState = bondState,
-        connectionState = connectionState,
+        connectionState = resolvedConnectionState,
       )
     )
   }

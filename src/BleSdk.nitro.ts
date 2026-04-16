@@ -12,6 +12,7 @@ export interface BleDevice {
   rssi: number;
   isBle: boolean;
   serviceUuids: string[];
+  characterSticks: string[];
 }
 
 export interface BleSdk extends HybridObject<{

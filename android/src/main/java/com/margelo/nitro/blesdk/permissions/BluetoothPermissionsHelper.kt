@@ -65,6 +65,22 @@ fun getRequiredPermissions() : Array<String> {
     return granted
   }
 
+  fun hasScanPermission(context: Context): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      hasPermission(context, Manifest.permission.BLUETOOTH_SCAN)
+    } else {
+      allPermissionsGranted(context)
+    }
+  }
+
+  fun hasConnectPermission(context: Context): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      hasPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
+    } else {
+      true
+    }
+  }
+
   /**
    * REQUEST ALL required Bluetooth permissions from the user
    * */
@@ -112,4 +128,3 @@ fun getRequiredPermissions() : Array<String> {
 
 
   }
-

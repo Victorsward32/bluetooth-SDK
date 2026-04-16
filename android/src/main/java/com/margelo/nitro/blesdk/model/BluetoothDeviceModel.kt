@@ -1,7 +1,9 @@
 package com.margelo.nitro.blesdk.model
 
+import android.Manifest
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothProfile
+import androidx.annotation.RequiresPermission
 import com.margelo.nitro.blesdk.BleDevice
 
 data class BluetoothDeviceModel(
@@ -16,6 +18,7 @@ data class BluetoothDeviceModel(
       type == BluetoothDevice.DEVICE_TYPE_DUAL
   ),
   val serviceUuids: List<String> = emptyList(),
+  val characterSticsUuid: List<String> = emptyList(),
 ) {
   companion object {
     fun isBleType(type: Int): Boolean {
@@ -23,22 +26,27 @@ data class BluetoothDeviceModel(
         type == BluetoothDevice.DEVICE_TYPE_DUAL
     }
 
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     fun fromBluetoothDevice(
       device: BluetoothDevice,
       rssi: Int = -1,
-      serviceUuids: List<String> = device.uuids?.map { uuid -> uuid.uuid.toString() } ?: emptyList(),
-      bondState: Int = device.bondState,
+      serviceUuids: List<String>? = null,
+      characterSticksUuid: List<String>?=null,
+      bondState: Int? = null,
       connectionState: Int = BluetoothProfile.STATE_DISCONNECTED,
     ): BluetoothDeviceModel {
+      val resolvedType = device.type
+//      val characterSticksUuid = null
       return BluetoothDeviceModel(
         name = device.name,
         address = device.address,
-        type = device.type,
-        bondState = bondState,
+        type = resolvedType,
+        bondState = bondState ?: device.bondState,
         connectionState = connectionState,
         rssi = rssi,
-        isBle = isBleType(device.type),
-        serviceUuids = serviceUuids,
+        isBle = isBleType(resolvedType),
+        serviceUuids = serviceUuids ?: device.uuids?.map { uuid -> uuid.uuid.toString() } ?: emptyList(),
+        characterSticsUuid = characterSticksUuid ?: device.uuids?.map { uuid -> uuid.uuid.toString() } ?: emptyList(),
       )
     }
   }
